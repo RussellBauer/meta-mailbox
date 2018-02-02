@@ -1,0 +1,13 @@
+[Unit]
+Description=SC-BMC Communication
+
+[Service]
+Restart=always
+ExecStart=/usr/bin/env catch
+
+Type=forking
+
+
+[Install]
+#WantedBy={SYSTEMD_DEFAULT_TARGET}
+WantedBy=multi-user.target

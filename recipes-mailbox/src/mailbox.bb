@@ -34,10 +34,3 @@ do_install() {
 FILES_${PN} += "${datadir}/*"
 FILES_${PN} += "${systemd_unitdir}/*"
 
-#LINK = "../mailbox.service:${SYSTEMD_DEFAULT_TARGET}.wants/mailbox.service"
-#SYSTEMD_LINK_${PN} += "${LINK}"
-
-
-SYSTEMD_LINK_${PN} += "../xyz.openbmc_project.RRC.service:${SYSTEMD_DEFAULT_TARGET}.wants/xyz.openbmc_project.RRC.service"
-
-

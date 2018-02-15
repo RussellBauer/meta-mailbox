@@ -838,7 +838,7 @@ long sleepCount = 0;
 			if((sleepCount % 200) == 0)	//??? 20 didn't do it, the sleep may not be very calibrated hit the headbeat once a second
 				upDateHeartBeat();
 
-    		sleep(.05);
+    		sleep(.1);
 			sleepCount++;
     	}
     }else{

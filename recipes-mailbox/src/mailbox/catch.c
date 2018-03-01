@@ -13,12 +13,26 @@
 #include <netdb.h>
 #include <ifaddrs.h>
 
+//this is for adding the ioctl control and user signals
+#include <sys/ioctl.h>
+#include <errno.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#define IOC_MAGIC 'Q' // defines the magic number
+#define IOCTL_SC_BMC_COMM_REG _IO(IOC_MAGIC,0) // defines our ioctl call
+#define IOCTL_SC_BMC_COMM_UNREG _IO(IOC_MAGIC,1) // defines our ioctl call
 
 #include "catch.h"
 
 int processFailure(char);
 
-//here's the plan....
+//here's the plan.... part 2
+//register for a signal from the driver
+//sleep ... teh signal will cut teh sleep short
+//on check mailbox is req is active, do the deed, 
 //open up the file and look to see if we have a mailbox request (REQ_MAILBOX)
 //if a request is present (!0) change from last reading
 //read the mailbox (REQ_DATA)
@@ -51,7 +65,7 @@ int processFailure(char);
 void sig_term_handler(int signum, siginfo_t *info, void *ptr)
 {
     write(STDERR_FILENO, SIGTERM_MSG, sizeof(SIGTERM_MSG));
-	system(KILL_SLAVE);
+    system(KILL_SLAVE);
     exit(0);	
 }
 
@@ -65,6 +79,24 @@ void catch_sigterm()
 
     sigaction(SIGTERM, &_sigact, NULL);
 }
+
+//add new signal catch
+static void sig_usr(int); /* one handler for both signals */
+int sig1active = 0;
+static void
+sig_usr(int signo)      /* argument is signal number */
+{
+    if (signo == SIGUSR1){
+        printf("received SIGUSR1\n");
+		sig1active = 1;
+	}
+    else if (signo == SIGUSR2)
+        printf("received SIGUSR2\n");
+    else
+        fprintf(stderr, "received signal %d\n", signo);
+//    printf("got a signal...\n");
+}
+
 
 
 unsigned char checkSumData(char *buffer, int length){
@@ -84,6 +116,11 @@ int checkMailBox(){
 FILE *fptr;
 char mailBox;
 int returnValue = 0;
+
+	 if(!sig1active)
+		return returnValue;
+	 else
+		sig1active = 0;
 
 	 reqBuffer.reqPacket.reqDataPktSize = 0;	
 	 fptr = fopen(FILE_NAME,"rb");
@@ -793,7 +830,7 @@ int main()
 int x;
 int id;
 int chkSumOK = 0;
-long sleepCount = 0;
+int fd;
 
 	id = fork();
 	if(id == 0){	//this is the child
@@ -804,6 +841,24 @@ long sleepCount = 0;
 		system(CREATE_SLAVE);
     	initFile();
     	catch_sigterm();
+//setup to catch new signal..
+        if (signal(SIGUSR1, sig_usr) == SIG_ERR) {
+                fprintf(stderr, "Can't catch SIGUSR1: %s", strerror(errno));
+                exit(1);
+        }
+        if (signal(SIGUSR2, sig_usr) == SIG_ERR) {
+                fprintf(stderr, "Can't catch SIGUSR2: %s", strerror(errno));
+                exit(1);
+        }
+        fd = open("/dev/scbmc_comm", O_RDWR);
+        if (fd == -1)
+        {
+                printf("Error in opening file \n");
+                exit(-1);
+        }
+        ioctl(fd,IOCTL_SC_BMC_COMM_REG);  //ioctl call
+  		close(fd);
+//
     	while(1){			
     		if(checkMailBox()){
 				if(reqBuffer.reqPacket.lastMailBox != 0){
@@ -835,11 +890,9 @@ long sleepCount = 0;
 					//printf("Task pid : %d\n",getpid());
 				}
     		}
-			if((sleepCount % 200) == 0)	//??? 20 didn't do it, the sleep may not be very calibrated hit the headbeat once a second
-				upDateHeartBeat();
+			upDateHeartBeat();
 
     		sleep(1);	//anthing less than 1 is a cpu hog....
-			sleepCount++;
     	}
     }else{
 		//printf("Let the parrent die....\n");

@@ -66,7 +66,7 @@ union REQ_PACKET ackBuffer;
 #define MAC_ADDRESS							0x05
 #define BMCSubCommand						0x30c8
 #define SetPSUDataForIBMGreyJoy				0x13
-#define SC_BMC_GET_PROTOCOL_VERSION			0x302C
-#define SC_BMC_SET_SENSOR_INFO				0x3015
+#define SC_BMC_GET_PROTOCOL_VERSION			0xC02C
+#define SC_BMC_SET_SENSOR_INFO				0xC015
 #define SC_BMC_SET_CHASSIS_POWER_READINGS  	0x302f 
 

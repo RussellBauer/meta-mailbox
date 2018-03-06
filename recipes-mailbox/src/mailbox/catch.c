@@ -26,7 +26,8 @@
 #define IOCTL_SC_BMC_COMM_UNREG _IO(IOC_MAGIC,1) // defines our ioctl call
 
 #include "catch.h"
-
+char cachedMac[7];	//once we get the mack just used a cached value
+char cachedIP[5];	//dito in ipaddress
 int processFailure(char);
 
 //here's the plan.... part 2
@@ -87,7 +88,7 @@ static void
 sig_usr(int signo)      /* argument is signal number */
 {
     if (signo == SIGUSR1){
-        printf("received SIGUSR1\n");
+//        printf("received SIGUSR1\n");
 		sig1active = 1;
 	}
     else if (signo == SIGUSR2)
@@ -346,7 +347,11 @@ finish:
 
 int processGetPWM(){
 
+#if 0
 int pwmValue = readPwm();
+#else
+int pwmValue = 99;	
+#endif
 //Write -> iDrac => Seq: 0x70 NetFn/CMD CS-OEM    SC_BMC_GET_PWM                                           :[C0 20 70 70 8C 94]
 //Write -> MC    => Seq: 0x70 NetFn/CMD cs-oem    SC_BMC_GET_PWM                                           :[C4 CC 20 70 8C 00 39 00 AB]
 	if(pwmValue == 0xaa55){
@@ -360,7 +365,7 @@ int pwmValue = readPwm();
 		ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
 		ackBuffer.ackPacket.completionCode = 0x00; 	
 		ackBuffer.ackPacket.payLoad[0] = 0x20;
-		ackBuffer.ackPacket.payLoad[1] = readPwm();
+		ackBuffer.ackPacket.payLoad[1] = pwmValue;
 		ackBuffer.ackPacket.payLoad[2] = 0x00;
 		ackBuffer.ackPacket.payLoad[3] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, 7);	 
 
@@ -450,13 +455,15 @@ int readMAC(char *buffer) {
         }
 
         printf("MacAddress : <%s>\n",macAddress);
-	//strtol(const char *str, char **endptr, int base)    
-        buffer[0] = (char) strtol(macAddress, &ptr, 16);
-        buffer[1] = (char) strtol(ptr+1, &ptr, 16);
-        buffer[2] = (char) strtol(ptr+1, &ptr, 16);
-        buffer[3] = (char) strtol(ptr+1, &ptr, 16);
-        buffer[4] = (char) strtol(ptr+1, &ptr, 16);
-        buffer[5] = (char) strtol(ptr+1, &ptr, 16);
+	//strtol(const char *str, char **endptr, int base) 
+		cachedMac[0] = 0xa5;	//once we get the mack just used a cached value
+	   
+        cachedMac[1] = buffer[0] = (char) strtol(macAddress, &ptr, 16);
+        cachedMac[2] = buffer[1] = (char) strtol(ptr+1, &ptr, 16);
+        cachedMac[3] = buffer[2] = (char) strtol(ptr+1, &ptr, 16);
+        cachedMac[4] = buffer[3] = (char) strtol(ptr+1, &ptr, 16);
+        cachedMac[5] = buffer[4] = (char) strtol(ptr+1, &ptr, 16);
+        cachedMac[6] = buffer[5] = (char) strtol(ptr+1, &ptr, 16);
 
 
 finish:
@@ -567,11 +574,13 @@ int readIPAddress(char *buffer)
             }
             printf("Interface : <%s>\n",ifa->ifa_name );
             printf("Address   : <%s>\n", host); 
-
-        buffer[0] = strtol(host, &ptr, 10);
-        buffer[1] = strtol(ptr+1, &ptr, 10);
-	buffer[2] = strtol(ptr+1, &ptr, 10);
-        buffer[3] = strtol(ptr+1, &ptr, 10);
+	
+			cachedIP[0] = 0xa5;	//dito in ipaddress
+	
+        	cachedIP[1] = buffer[0] = strtol(host, &ptr, 10);
+    	    cachedIP[2] = buffer[1] = strtol(ptr+1, &ptr, 10);
+	    	cachedIP[3] = buffer[2] = strtol(ptr+1, &ptr, 10);
+        	cachedIP[4] = buffer[3] = strtol(ptr+1, &ptr, 10);
 			
         }
     }
@@ -598,26 +607,47 @@ char netAddress[6];
 	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
 	ackBuffer.ackPacket.completionCode = 0x00; 
 	if(which == IP_ADDRESS){
-		readIPAddress(netAddress);
-		ackBuffer.ackPacket.payLoad[0] = 0x11;
-		ackBuffer.ackPacket.payLoad[1] = netAddress[0];		//0xc0;
-		ackBuffer.ackPacket.payLoad[2] = netAddress[1];		//0xa8;
-		ackBuffer.ackPacket.payLoad[3] = netAddress[2];		//0x11;
-		ackBuffer.ackPacket.payLoad[4] = netAddress[3];		//0xc1;
-		ackBuffer.ackPacket.payLoad[5] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, 9);	 
-		ackBuffer.ackPacket.reqDataPktSize = 12;
+		if(cachedIP[0] != 0xa5){	//dito in ipaddress
+			readIPAddress(netAddress);
+			ackBuffer.ackPacket.payLoad[0] = 0x11;
+			ackBuffer.ackPacket.payLoad[1] = netAddress[0];		//0xc0;
+			ackBuffer.ackPacket.payLoad[2] = netAddress[1];		//0xa8;
+			ackBuffer.ackPacket.payLoad[3] = netAddress[2];		//0x11;
+			ackBuffer.ackPacket.payLoad[4] = netAddress[3];		//0xc1;
+			ackBuffer.ackPacket.payLoad[5] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, 9);	 
+			ackBuffer.ackPacket.reqDataPktSize = 12;
+		}else{
+			ackBuffer.ackPacket.payLoad[0] = 0x11;
+			ackBuffer.ackPacket.payLoad[1] = cachedIP[1];		//0xc0;
+			ackBuffer.ackPacket.payLoad[2] = cachedIP[2];		//0xa8;
+			ackBuffer.ackPacket.payLoad[3] = cachedIP[3];		//0x11;
+			ackBuffer.ackPacket.payLoad[4] = cachedIP[4];		//0xc1;
+			ackBuffer.ackPacket.payLoad[5] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, 9);	 
+			ackBuffer.ackPacket.reqDataPktSize = 12;
+		}
 	}else{
-		readMAC(netAddress);
-		ackBuffer.ackPacket.payLoad[0] = 0x11;
-		ackBuffer.ackPacket.payLoad[1] = netAddress[0];		//0x10;
-		ackBuffer.ackPacket.payLoad[2] = netAddress[1];		//0x98;
-		ackBuffer.ackPacket.payLoad[3] = netAddress[2];		//0x36;
-		ackBuffer.ackPacket.payLoad[4] = netAddress[3];		//0xb3;
-		ackBuffer.ackPacket.payLoad[5] = netAddress[4];		//0x7c;
-		ackBuffer.ackPacket.payLoad[6] = netAddress[5];		//0xec;
-		ackBuffer.ackPacket.payLoad[7] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, 11);	 
-		ackBuffer.ackPacket.reqDataPktSize = 14;
-
+		if(cachedMac[0] != 0xa5){	//once we get the mack just used a cached value
+			readMAC(netAddress);
+			ackBuffer.ackPacket.payLoad[0] = 0x11;
+			ackBuffer.ackPacket.payLoad[1] = netAddress[0];		//0x10;
+			ackBuffer.ackPacket.payLoad[2] = netAddress[1];		//0x98;
+			ackBuffer.ackPacket.payLoad[3] = netAddress[2];		//0x36;
+			ackBuffer.ackPacket.payLoad[4] = netAddress[3];		//0xb3;
+			ackBuffer.ackPacket.payLoad[5] = netAddress[4];		//0x7c;
+			ackBuffer.ackPacket.payLoad[6] = netAddress[5];		//0xec;
+			ackBuffer.ackPacket.payLoad[7] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, 11);	 
+			ackBuffer.ackPacket.reqDataPktSize = 14;
+	   }else{
+			ackBuffer.ackPacket.payLoad[0] = 0x11;
+			ackBuffer.ackPacket.payLoad[1] = cachedMac[1];		//0x10;
+			ackBuffer.ackPacket.payLoad[2] = cachedMac[2];		//0x98;
+			ackBuffer.ackPacket.payLoad[3] = cachedMac[3];		//0x36;
+			ackBuffer.ackPacket.payLoad[4] = cachedMac[4];		//0xb3;
+			ackBuffer.ackPacket.payLoad[5] = cachedMac[5];		//0x7c;
+			ackBuffer.ackPacket.payLoad[6] = cachedMac[6];		//0xec;
+			ackBuffer.ackPacket.payLoad[7] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, 11);	 
+			ackBuffer.ackPacket.reqDataPktSize = 14;
+	   }
 	}
 
 return 0;

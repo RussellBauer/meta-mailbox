@@ -30,6 +30,13 @@ char cachedMac[7];	//once we get the mack just used a cached value
 char cachedIP[5];	//dito in ipaddress
 int processFailure(char);
 
+#define MAXLOG 50
+struct{
+	unsigned int whosBeenLogged[MAXLOG];	//I think it a lot less caommand
+	int nextSpot;
+
+}logStruct;
+
 //here's the plan.... part 2
 //register for a signal from the driver
 //sleep ... teh signal will cut teh sleep short
@@ -49,16 +56,35 @@ int processFailure(char);
 
 
 
-//commands to do
-//commandName["302F"] = "CS-OEM    SC_BMC_SET_CHASSIS_POWER_READINGS                       "
-//Write -> iDrac => Seq: 0x78 NetFn/CMD CS-OEM    SC_BMC_SET_CHASSIS_POWER_READINGS                        :[C0 20 70 78 2F 03 AB 02 55 00 02 FF FF FF E5]
-//Write -> MC    => Seq: 0x78 NetFn/CMD cs-oem    SC_BMC_SET_CHASSIS_POWER_READINGS                        :[C4 CC 20 78 2F 00 39]
 
+void logCommands(unsigned int cmdtolog, int tag, char *dataBuffer,int length){
+int x;
+FILE *fptr;
 
+	if(logStruct.nextSpot >= MAXLOG)
+		return;															//no more spots...
+	for(x=0;x<logStruct.nextSpot;x++)
+		if(logStruct.whosBeenLogged[x] == cmdtolog)
+			return;														//already logged	
+	if(logStruct.nextSpot == 0){ 										//if the log has never been touched create a new one
+	 	fptr = fopen("/home/root/scbmc_cmds","w");
+	}else{      														//else append it
+	 	fptr = fopen("/home/root/scbmc_cmds","a");
+	}	 
+	fprintf(fptr,"0X%04X",cmdtolog);
+	if(tag)
+		fprintf(fptr," - Not supported\n");
+        else
+		fprintf(fptr,"\n");
+//add comamnd data????
+        for(x = 0; x<length;x++)
+		fprintf(fptr,"%02X ",dataBuffer[x]);
+	fprintf(fptr,"\n");
+	fclose(fptr);
 
-
-
-
+        logStruct.whosBeenLogged[logStruct.nextSpot] = cmdtolog;
+	logStruct.nextSpot++;
+}
 
 
 
@@ -190,10 +216,241 @@ int chksum = 0;
 																					   
 }
 
+//0XC02F - Not supported                                                                                                  
 //commandName["302F"] = "CS-OEM    SC_BMC_SET_CHASSIS_POWER_READINGS                       "
-//Write -> iDrac => Seq: 0x78 NetFn/CMD CS-OEM    SC_BMC_SET_CHASSIS_POWER_READINGS                        :[C0 20 70 78 2F 03 AB 02 55 00 02 FF FF FF E5]
-//Write -> MC    => Seq: 0x78 NetFn/CMD cs-oem    SC_BMC_SET_CHASSIS_POWER_READINGS                        :[C4 CC 20 78 2F 00 39]
-int processSC_BMC_SET_CHASSIS_POWER_READINGS (){
+//Write -> iDrac => Seq: 0x88 NetFn/CMD CS-OEM    SC_BMC_SET_CHASSIS_POWER_READINGS                        :{  67 mSec} [C0 20 70 88 2F 03 C2 00 45 00 01 FF FF FF D1]
+//Write -> MC    => Seq: 0x88 NetFn/CMD cs-oem    SC_BMC_SET_CHASSIS_POWER_READINGS                        :{  77 mSec} [C4 CC 20 88 2F 00 29]
+int processSC_BMC_SET_CHASSIS_POWER_READINGS(){
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+0);	//0 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+
+//0XC0D4 - Not supported                                                                                                  
+//commandName["30D4"] = "CS-OEM    IPMI_OEM_CMD_iDRAC_POST_CODE                            "
+//Write -> iDrac => Seq: 0x28 NetFn/CMD CS-OEM    IPMI_OEM_CMD_iDRAC_POST_CODE                             :{173630 mSec} [C0 20 70 28 D4 00 00 00 00 94]
+//Write -> MC    => Seq: 0x28 NetFn/CMD cs-oem    IPMI_OEM_CMD_iDRAC_POST_CODE                             :{173633 mSec} [C4 CC 20 28 D4 00 E7 7D 4A 01 00 00 00 00 00 00 00 00 00 00 00 00 35]
+int processIPMI_OEM_CMD_iDRAC_POST_CODE(){
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = 0xe7;
+	ackBuffer.ackPacket.payLoad[1] = 0x7d;
+	ackBuffer.ackPacket.payLoad[2] = 0x4a;
+	ackBuffer.ackPacket.payLoad[3] = 0x01;
+	ackBuffer.ackPacket.payLoad[4] = 0x00;
+	ackBuffer.ackPacket.payLoad[5] = 0x00;
+	ackBuffer.ackPacket.payLoad[6] = 0x00;
+	ackBuffer.ackPacket.payLoad[7] = 0x00;
+	ackBuffer.ackPacket.payLoad[8] = 0x00;
+	ackBuffer.ackPacket.payLoad[9] = 0x00;
+	ackBuffer.ackPacket.payLoad[10] = 0x00;
+	ackBuffer.ackPacket.payLoad[11] = 0x00;
+	ackBuffer.ackPacket.payLoad[12] = 0x00;
+	ackBuffer.ackPacket.payLoad[13] = 0x00;
+	ackBuffer.ackPacket.payLoad[15] = 0x00;
+	ackBuffer.ackPacket.payLoad[15] = 0x00;
+	ackBuffer.ackPacket.payLoad[16] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+16);	//16 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+
+
+
+
+
+//0XC027 - Not supported                                                                                                  
+//commandName["3027"] = "CS-OEM    SC_BMC_GET_INTERNAL_VARIABLE_CMD                        "
+//Write -> iDrac => Seq: 0x50 NetFn/CMD CS-OEM    SC_BMC_GET_INTERNAL_VARIABLE_CMD                         :{1785 mSec} [C0 20 70 50 27 01 18]
+//Write -> MC    => Seq: 0x50 NetFn/CMD cs-oem    SC_BMC_GET_INTERNAL_VARIABLE_CMD                         :{1787 mSec} [C4 CC 20 50 27 00 7F EA]
+int processSC_BMC_GET_INTERNAL_VARIABLE_CMD(){
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = 0x7f;
+	ackBuffer.ackPacket.payLoad[1] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+1);	//1 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+
+//0XC04C - Not supported                                                                                                  
+//commandName["304C"] = "CS-OEM    SC_BMC_SET_SECONDARY_PSU_INFO                           "
+//Write -> iDrac => Seq: 0x48 NetFn/CMD CS-OEM    SC_BMC_SET_SECONDARY_PSU_INFO                            :{24056 mSec} [C0 20 70 48 4C FA 06 00 00 00 00 00 00 FC]
+//Write -> MC    => Seq: 0x48 NetFn/CMD cs-oem    SC_BMC_SET_SECONDARY_PSU_INFO                            :{24061 mSec} [C4 CC 20 48 4C 00 4C]
+int processSC_BMC_SET_SECONDARY_PSU_INFO(){
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+0);	//0 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+
+
+//0XC026 - Not supported                                                                                                  
+//commandName["3026"] = "CS-OEM    IPMI_CMD_SYNC_CHASSIS_ST                                "
+//Write -> iDrac => Seq: 0x3C NetFn/CMD CS-OEM    IPMI_CMD_SYNC_CHASSIS_ST                                 :{162844 mSec} [C0 20 70 3C 26 20 00 20 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 0E]
+//Write -> MC    => Seq: 0x3C NetFn/CMD cs-oem    IPMI_CMD_SYNC_CHASSIS_ST                                 :{162849 mSec} [C4 CC 20 3C 26 00 FD]
+int processIPMI_CMD_SYNC_CHASSIS_ST(){
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+0);	//0 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+
+
+//0XC0C8 - Not supported                                                                                                  
+//commandName["30C8"] = "CS-OEM    SC_BMC_DCS_OEM_WRAPPER_CMDxSC_BMC_SET_THERMAL_PROPERTIES"
+//Write -> iDrac => Seq: 0x38 NetFn/CMD CS-OEM    SC_BMC_DCS_OEM_WRAPPER_CMD/SC_BMC_SET_THERMAL_PROPERTIES :{162824 mSec} [C0 20 70 38 C8 00 01 0C 00 00 00 0C 00 01 04 01 09 02 05 03 03 04 37 20]
+//Write -> MC    => Seq: 0x38 NetFn/CMD cs-oem    SC_BMC_DCS_OEM_WRAPPER_CMD/SC_BMC_SET_THERMAL_PROPERTIES :{162839 mSec} [C4 CC 20 38 C8 00 01 0C 00 00 00 D3]
+int processSC_BMC_DCS_OEM_WRAPPER_CMDxSC_BMC_SET_THERMAL_PROPERTIES(){
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = 0x01;
+	ackBuffer.ackPacket.payLoad[1] = 0x0c;
+	ackBuffer.ackPacket.payLoad[2] = 0x00;
+	ackBuffer.ackPacket.payLoad[3] = 0x00;
+	ackBuffer.ackPacket.payLoad[4] = 0x00;
+	ackBuffer.ackPacket.payLoad[5] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+5);	//5 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+
+
+//0XC014 - Not supported                                                                                                  
+//commandName["3014"] = "CS-OEM    SC_BMC_GET_CHASSIS_NAME                                 "
+//Write -> iDrac => Seq: 0xF8 NetFn/CMD CS-OEM    SC_BMC_GET_CHASSIS_NAME                                  :{614259 mSec} [C0 20 70 F8 14 84]
+//Write -> MC    => Seq: 0xF8 NetFn/CMD cs-oem    SC_BMC_GET_CHASSIS_NAME                                  :{614260 mSec} [C4 CC 20 F8 14 00 06 44 43 53 5F 47 35 19]
+//this should be filled in with the data recevied by SC_BMC_SET_CHASSIS_NAME
+int processSC_BMC_GET_CHASSIS_NAME(){
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = 0x06;
+	ackBuffer.ackPacket.payLoad[1] = 0x44;
+	ackBuffer.ackPacket.payLoad[2] = 0x43;
+	ackBuffer.ackPacket.payLoad[3] = 0x53;
+	ackBuffer.ackPacket.payLoad[4] = 0x5f;
+	ackBuffer.ackPacket.payLoad[5] = 0x47;
+	ackBuffer.ackPacket.payLoad[6] = 0x35;
+	ackBuffer.ackPacket.payLoad[7] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+7);	//7 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+
+
+//0XC013 - Not supported                                                                                                  
+//commandName["3013"] = "CS-OEM    SC_BMC_SET_CHASSIS_NAME                                 "
+//Write -> iDrac => Seq: 0xF4 NetFn/CMD CS-OEM    SC_BMC_SET_CHASSIS_NAME                                  :{614244 mSec} [C0 20 70 F4 13 06 44 43 53 5F 47 35 CE]
+//Write -> MC    => Seq: 0xF4 NetFn/CMD cs-oem    SC_BMC_SET_CHASSIS_NAME                                  :{614251 mSec} [C4 CC 20 F4 13 00 D9]
+//this should be filled in with the data recevied by 
+int processSC_BMC_SET_CHASSIS_NAME(){
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+0);	//0 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+
+//0XC011 - Not supported                                                                                                  
+//commandName["3111"] = "cs-oem    SC_BMC_SET_CHASSIS_CONF                                 "
+//Write -> iDrac => Seq: 0x2C NetFn/CMD CS-OEM    SC_BMC_SET_CHASSIS_CONF                                  :{162787 mSec} [C0 20 70 2C 11 20 0F 1B 03 35 00 00 01 01 01 FF 03 01 25 27 FF FF 0F 8A 00 00 00 0E 01 0C 47 64 23 C1 0B 33]
+//Write -> MC    => Seq: 0x2C NetFn/CMD cs-oem    SC_BMC_SET_CHASSIS_CONF                                  :{162798 mSec} [C4 CC 20 2C 11 00 00 A3]
+int processSC_BMC_SET_CHASSIS_CONF(){
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = 0x11;
+	ackBuffer.ackPacket.payLoad[1] = 0x00;
+	ackBuffer.ackPacket.payLoad[2] = 0x00;
+	ackBuffer.ackPacket.payLoad[3] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+3);	//3 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+//0X1837 - Not supported                                                                                                  
+//commandName["0737"] = "app       IPMI_CMD_GET_SYSTEM_GUID                                "
+//Write -> iDrac => Seq: 0xF0 NetFn/CMD App       IPMI_CMD_GET_SYSTEM_GUID                                 :{173163 mSec} [18 C8 70 F0 37 69]
+//Write -> MC    => Seq: 0xF0 NetFn/CMD app       IPMI_CMD_GET_SYSTEM_GUID                                 :{173165 mSec} [1C 74 20 F0 37 00 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF C9]
+int processIPMI_CMD_GET_SYSTEM_GUID(){
 
 	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
 	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
@@ -202,9 +459,52 @@ int processSC_BMC_SET_CHASSIS_POWER_READINGS (){
 	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
 	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
 	ackBuffer.ackPacket.completionCode = 0x00; 	
-	ackBuffer.ackPacket.payLoad[0] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, 4);	 
+	ackBuffer.ackPacket.payLoad[0] = 0xff;
+	ackBuffer.ackPacket.payLoad[1] = 0xff;
+	ackBuffer.ackPacket.payLoad[2] = 0xff;
+	ackBuffer.ackPacket.payLoad[3] = 0xff;
+	ackBuffer.ackPacket.payLoad[4] = 0xff;
+	ackBuffer.ackPacket.payLoad[5] = 0xff;
+	ackBuffer.ackPacket.payLoad[6] = 0xff;
+	ackBuffer.ackPacket.payLoad[7] = 0xff;
+	ackBuffer.ackPacket.payLoad[8] = 0xff;
+	ackBuffer.ackPacket.payLoad[9] = 0xff;
+	ackBuffer.ackPacket.payLoad[10] = 0xff;
+	ackBuffer.ackPacket.payLoad[11] = 0xff;
+	ackBuffer.ackPacket.payLoad[12] = 0xff;
+	ackBuffer.ackPacket.payLoad[13] = 0xff;
+	ackBuffer.ackPacket.payLoad[14] = 0xff;
+	ackBuffer.ackPacket.payLoad[15] = 0xff;
+	ackBuffer.ackPacket.payLoad[16] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+16);	//16 is the size of payload filled in	 
 
-	ackBuffer.ackPacket.reqDataPktSize = 7;
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
+
+
+return 0;
+}
+
+
+
+
+
+//0X1859 - Not supported                                                                                                  
+//commandName["0659"] = "App       IPMI_CMD_GET_SYSTEM_INFO                                "
+//Write -> iDrac => Seq: 0x68 NetFn/CMD App       IPMI_CMD_GET_SYSTEM_INFO                                 :{163029 mSec} [18 C8 70 68 59 00 C4 00 00 0B]
+//Write -> MC    => Seq: 0x68 NetFn/CMD app       IPMI_CMD_GET_SYSTEM_INFO                                 :{163035 mSec} [1C 74 20 68 59 00 11 00 0E]
+int processIPMI_CMD_GET_SYSTEM_INFO(){
+
+	ackBuffer.ackPacket.BCi2cAddress= reqBuffer.reqPacket.BCi2cAddress;
+	ackBuffer.ackPacket.netFunc_LUN = reqBuffer.reqPacket.netFunc_LUN + 0x04; 		//turn into a reponce netFun 0x1c;
+	ackBuffer.ackPacket.headerCheckSum = (0x200 - ackBuffer.ackPacket.BCi2cAddress - ackBuffer.ackPacket.netFunc_LUN) & 0xff;
+	ackBuffer.ackPacket.BMCi2cAddress = MYSLAVEADDRESS;
+	ackBuffer.ackPacket.sequence = reqBuffer.reqPacket.sequence;
+	ackBuffer.ackPacket.command = reqBuffer.reqPacket.command;
+	ackBuffer.ackPacket.completionCode = 0x00; 	
+	ackBuffer.ackPacket.payLoad[0] = 0x11;
+	ackBuffer.ackPacket.payLoad[1] = 0x00;
+	ackBuffer.ackPacket.payLoad[2] = checkSumData(&ackBuffer.ackPacket.BMCi2cAddress, OVERHEAD+2);	//2 is the size of payload filled in	 
+
+	ackBuffer.ackPacket.reqDataPktSize = PKTOVERHEAD+2;				
 
 
 return 0;
@@ -720,6 +1020,8 @@ int netFuncCmd = (reqBuffer.reqPacket.netFunc_LUN << 8) + reqBuffer.reqPacket.co
 int returnVal = 1;
 
 	//printf("\t\tprocessNetFun_CMD()\n");
+
+
 	switch(netFuncCmd){
 		case IPMI_CMD_GET_DEVICE_ID: 
 			//printf("\t\t\tIPMI_CMD_GET_DEVICE_ID\n");
@@ -757,15 +1059,52 @@ int returnVal = 1;
 		case SC_BMC_SET_SENSOR_INFO:
 			processSC_BMC_SET_SENSOR_INFO();
 		break;	
+		case IPMI_CMD_GET_SYSTEM_INFO: 
+			processIPMI_CMD_GET_SYSTEM_INFO();
+		break;
+		case IPMI_CMD_GET_SYSTEM_GUID: 
+			processIPMI_CMD_GET_SYSTEM_GUID();
+		break;
+		case SC_BMC_SET_CHASSIS_CONF: 
+			processSC_BMC_SET_CHASSIS_CONF();
+		break;
+		case SC_BMC_SET_CHASSIS_NAME: 
+			processSC_BMC_SET_CHASSIS_NAME();
+		break;
+		case SC_BMC_GET_CHASSIS_NAME: 
+			processSC_BMC_GET_CHASSIS_NAME();
+		break;
+		case SC_BMC_DCS_OEM_WRAPPER_CMDxSC_BMC_SET_THERMAL_PROPERTIES: 
+			processSC_BMC_DCS_OEM_WRAPPER_CMDxSC_BMC_SET_THERMAL_PROPERTIES();
+		break;
+		case IPMI_CMD_SYNC_CHASSIS_ST: 
+			processIPMI_CMD_SYNC_CHASSIS_ST();
+		break;
+		case SC_BMC_SET_SECONDARY_PSU_INFO: 
+			processSC_BMC_SET_SECONDARY_PSU_INFO();
+		break;
+		case SC_BMC_GET_INTERNAL_VARIABLE_CMD: 
+			processSC_BMC_GET_INTERNAL_VARIABLE_CMD();
+		break;
+		case IPMI_OEM_CMD_iDRAC_POST_CODE: 
+			processIPMI_OEM_CMD_iDRAC_POST_CODE();
+		break;
+		case SC_BMC_SET_CHASSIS_POWER_READINGS: 
+			processSC_BMC_SET_CHASSIS_POWER_READINGS();
+		break;
+
 		default:
 			printf("%04X not supported yet\n",netFuncCmd);
 NOT_SUPPORTED:
+			logCommands(netFuncCmd,1,&reqBuffer.reqPacket.BMCi2cAddress,reqBuffer.reqPacket.reqDataPktSize); //tag unsupported....
 			processFailure(0xc1);	//not supported
+
 			//this should load up an unsupport responce
-			returnVal = 0;
+			return(0);
 	}			 
 
-return returnVal = 1;
+    	logCommands(netFuncCmd,0,&reqBuffer.reqPacket.BMCi2cAddress,reqBuffer.reqPacket.reqDataPktSize); //log all for test....
+	return returnVal = 1;
 }
 
 int writeDataACK(){
@@ -865,6 +1204,7 @@ int fd;
 	id = fork();
 	if(id == 0){	//this is the child
 
+		logStruct.nextSpot = 0;
 		//init the reg buffer....
 		memset(reqBuffer.buffer,0,sizeof(reqBuffer.buffer));
 		memset(ackBuffer.buffer,0,sizeof(ackBuffer.buffer));
@@ -893,12 +1233,12 @@ int fd;
     		if(checkMailBox()){
 				if(reqBuffer.reqPacket.lastMailBox != 0){
 					//printf("\nPossible New Comamnd [%02x][%02x]\n\t",reqBuffer.reqPacket.lastMailBox,reqBuffer.reqPacket.reqDataPktSize);
-					for(x=0;x<reqBuffer.reqPacket.reqDataPktSize;x++){
-						if(!(x%16)){
-							//printf("\n");
-						}
-						//printf("%02X ",reqBuffer.buffer[2+x]);
-					}
+					//for(x=0;x<reqBuffer.reqPacket.reqDataPktSize;x++){
+					//	if(!(x%16)){
+					//		//printf("\n");
+					//	}
+					//	//printf("%02X ",reqBuffer.buffer[2+x]);
+					//}
 					//printf("\n");
 					if(chkSumOK = validateComamndData(&reqBuffer.reqPacket.BMCi2cAddress, reqBuffer.reqPacket.reqDataPktSize)){
 						printf("reqBuffer checksum validation failed [%02x]\n",chkSumOK);
